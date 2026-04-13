@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>高效率功放终极性能对比模拟器 - Ultra版</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        body { 
+            background-color: #0a0a0a; 
+            color: #e0e0e0; 
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            min-height: 100vh; 
+            margin: 0; 
+        }
+        .container { 
+            background: linear-gradient(145deg, #1a1a1a 0%, #121212 100%);
+            padding: 30px 40px; 
+            border-radius: 20px; 
+            box-shadow: 0 20px 50px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.05); 
+            width: 1050px; 
+            border: 1px solid #2a2a2a;
+        }
+        .header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 20px; 
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 20px;
+        }
+        .title-area h2 { margin: 0 0 8px 0; font-size: 1.8em; color: #ffffff; letter-spacing: 1px;}
+        .title-area p { font-size: 0.95em; color: #ffca28; margin: 0; font-weight: 500;}
+        .stats { 
+            display: flex; 
+            gap: 20px; 
+        }
+        .stat-box {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            background: rgba(0,0,0,0.3);
+            padding: 15px 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+            min-width: 130px;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
+        }
+        .stat-label { font-size: 0.85em; color: #999; margin-bottom: 8px;}
+        .stat-value { font-size: 1.6em; font-weight: 900; font-family: 'Consolas', monospace;}
+        
+        .val-new { color: #ff6b6b; text-shadow: 0 0 10px rgba(255,107,107,0.3); }
+        .val-trad { color: #4dabf7; text-shadow: 0 0 10px rgba(77,171,247,0.3); }
+        .val-pout { color: #f8f9fa; text-shadow: 0 0 10px rgba(255,255,255,0.3); }
+        .val-gamma { color: #ffca28; font-size: 1.8em !important;}
+
+        .slider-container { 
+            display: flex; 
+            align-items: center; 
+            margin-top: 20px; 
+            background: rgba(0,0,0,0.3);
+            padding: 20px 30px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        label { color: #bbb; font-weight: 600; font-size: 1.1em; width: 140px;}
+        input[type=range] { 
+            flex-grow: 1; 
+            margin: 0 30px; 
+            accent-color: #ffca28; 
+            cursor: pointer;
+            height: 8px;
+            border-radius: 4px;
+        }
+        #chart { 
+            width: 100%; 
+            height: 520px; 
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title-area">
+                <h2>双模式性能对比与极限突破</h2>
+                <p>✨ 魔法区间遮罩区：当导通角 γ 在 [π, 1.205π] 时，实现效率与功率的绝对双赢。</p>
+            </div>
+            <div class="stats">
+                <div class="stat-box">
+                    <span class="stat-label">新模式效率 (η_new)</span>
+                    <span id="etaNewVal" class="stat-value val-new">90.0%</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">传统效率 (η_trad)</span>
+                    <span id="etaTradVal" class="stat-value val-trad">78.5%</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">功率倍数 (Pout_Norm)</span>
+                    <span id="poutVal" class="stat-value val-pout">1.80 x</span>
+                </div>
+            </div>
+        </div>
+        
+        <div id="chart"></div>
+        
+        <div class="slider-container">
+            <label for="gammaSlider">调节导通角 $\gamma$：</label>
+            <input type="range" id="gammaSlider" min="3.14159265" max="6.2831853" step="0.01" value="3.14159265">
+            <span id="gammaVal" class="stat-value val-gamma" style="width: 90px; text-align: right;">1.00π</span>
+        </div>
+    </div>
+
+    <script>
+        const myChart = echarts.init(document.getElementById('chart'), 'dark');
+
+        let dataEtaNew = [];
+        let dataEtaTrad = [];
+        let dataPoutNorm = [];
+        
+        // 增加计算密度，让曲线更平滑
+        for (let g = Math.PI; g <= 2 * Math.PI; g += 0.01) {
+            let etaNew = 2 * Math.sqrt(2) * Math.sin(g / 2) / g;
+            
+            let numTrad = g - Math.sin(g);
+            let denTrad = 2 * Math.sin(g / 2) - g * Math.cos(g / 2);
+            let etaTrad = 0.5 * numTrad / denTrad;
+            
+            let poutNorm = Math.abs(g - 2 * Math.PI) < 0.01 ? 0 : (4 * Math.sqrt(2) * Math.sin(g / 2) * (1 - Math.cos(g / 2))) / (g - Math.sin(g));
+
+            dataEtaNew.push([g, etaNew]);
+            dataEtaTrad.push([g, etaTrad]);
+            dataPoutNorm.push([g, poutNorm]);
+        }
+
+        const option = {
+            backgroundColor: 'transparent',
+            // 彻底重构 Tooltip，进行数据截断和美化
+            tooltip: { 
+                trigger: 'axis', 
+                backgroundColor: 'rgba(20, 20, 20, 0.95)', 
+                borderColor: '#444',
+                borderWidth: 1,
+                padding: 15,
+                textStyle: { color: '#eee', fontSize: 14 },
+                formatter: function (params) {
+                    let g = params[0].axisValue;
+                    let piVal = (g / Math.PI).toFixed(2) + 'π';
+                    let html = `<div style="margin-bottom:10px; border-bottom:1px solid #555; padding-bottom:8px; font-weight:bold; color:#ffca28;">导通角 (γ) : ${piVal}</div>`;
+                    
+                    params.forEach(p => {
+                        // 过滤掉 markLine 的数据提示
+                        if(p.componentType === 'series') {
+                            let valStr = p.seriesIndex === 2 
+                                ? p.data[1].toFixed(2) + ' 倍' 
+                                : (p.data[1] * 100).toFixed(1) + '%';
+                            html += `<div style="display:flex; align-items:center; margin-top:6px;">
+                                <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background-color:${p.color}; margin-right:8px;"></span>
+                                <span style="flex-grow:1; margin-right:15px;">${p.seriesName}</span>
+                                <span style="font-weight:900; font-family:monospace;">${valStr}</span>
+                            </div>`;
+                        }
+                    });
+                    return html;
+                }
+            },
+            legend: { top: 0, textStyle: { color: '#ddd', fontSize: 14 }, icon: 'roundRect' },
+            // 优化 grid，防止标签挤压
+            grid: { left: '4%', right: '4%', bottom: '5%', top: '15%', containLabel: true },
+            xAxis: {
+                type: 'value',
+                name: '导通角 (γ) →',
+                nameTextStyle: { fontSize: 13, padding: [0, 0, 0, 10], color: '#aaa' },
+                min: Math.PI,
+                max: 2 * Math.PI,
+                interval: Math.PI / 4,
+                axisLabel: {
+                    color: '#aaa',
+                    fontSize: 13,
+                    formatter: function (value) {
+                        let piMultiple = value / Math.PI;
+                        if (Math.abs(piMultiple - 1) < 0.01) return 'π';
+                        if (Math.abs(piMultiple - 1.25) < 0.01) return '1.25π';
+                        if (Math.abs(piMultiple - 1.5) < 0.01) return '1.5π';
+                        if (Math.abs(piMultiple - 1.75) < 0.01) return '1.75π';
+                        if (Math.abs(piMultiple - 2) < 0.01) return '2π';
+                        return piMultiple.toFixed(2) + 'π';
+                    }
+                },
+                splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
+                axisLine: { lineStyle: { color: '#555' } }
+            },
+            yAxis: [
+                {
+                    type: 'value',
+                    name: '效率 (η)',
+                    nameTextStyle: { fontSize: 13, padding: [0, 20, 10, 0], color: '#aaa' },
+                    min: 0, max: 1.0, interval: 0.2,
+                    axisLabel: { color: '#aaa', formatter: value => (value).toFixed(1) },
+                    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } },
+                    axisLine: { show: true, lineStyle: { color: '#555' } }
+                },
+                {
+                    type: 'value',
+                    name: '归一化输出功率 (Pout_Norm)',
+                    nameTextStyle: { fontSize: 13, padding: [0, 0, 10, 20], color: '#aaa' },
+                    min: 0, max: 2.0, interval: 0.4,
+                    axisLabel: { color: '#aaa', formatter: value => (value).toFixed(1) },
+                    splitLine: { show: false },
+                    axisLine: { show: true, lineStyle: { color: '#555' } }
+                }
+            ],
+            series: [
+                {
+                    name: '本项目拟提出模式 (η_new)',
+                    type: 'line',
+                    showSymbol: false,
+                    itemStyle: { color: '#ff6b6b' },
+                    lineStyle: { width: 4, shadowColor: 'rgba(255,107,107,0.4)', shadowBlur: 10 },
+                    data: dataEtaNew,
+                    // 添加黄金区间的高亮遮罩区
+                    markArea: {
+                        itemStyle: { color: 'rgba(255, 107, 107, 0.1)' },
+                        data: [[
+                            { name: '黄金区间', xAxis: Math.PI, label: { color: '#ffca28', position: 'insideTop', fontSize: 14 } },
+                            { xAxis: 1.205 * Math.PI }
+                        ]]
+                    },
+                    markLine: {
+                        symbol: ['none', 'none'],
+                        label: { show: false },
+                        data: [{ xAxis: Math.PI }],
+                        lineStyle: { color: '#ffca28', width: 2, type: 'dashed' },
+                        animation: false // 关闭游标动画，跟随更紧密
+                    }
+                },
+                {
+                    name: '传统跨导型模式 (η_trad)',
+                    type: 'line',
+                    showSymbol: false,
+                    itemStyle: { color: '#4dabf7' },
+                    lineStyle: { width: 3 },
+                    data: dataEtaTrad
+                },
+                {
+                    name: '归一化输出功率 (Pout_Norm)',
+                    type: 'line',
+                    yAxisIndex: 1, 
+                    showSymbol: false,
+                    itemStyle: { color: '#e0e0e0' },
+                    lineStyle: { width: 3 },
+                    data: dataPoutNorm
+                }
+            ]
+        };
+
+        myChart.setOption(option);
+
+        function updateDashboard() {
+            const g = parseFloat(document.getElementById('gammaSlider').value);
+            
+            let etaNew = 2 * Math.sqrt(2) * Math.sin(g / 2) / g;
+            let numTrad = g - Math.sin(g);
+            let denTrad = 2 * Math.sin(g / 2) - g * Math.cos(g / 2);
+            let etaTrad = 0.5 * numTrad / denTrad;
+            let poutNorm = Math.abs(g - 2 * Math.PI) < 0.01 ? 0 : (4 * Math.sqrt(2) * Math.sin(g / 2) * (1 - Math.cos(g / 2))) / (g - Math.sin(g));
+
+            document.getElementById('gammaVal').innerText = (g / Math.PI).toFixed(2) + 'π';
+            document.getElementById('etaNewVal').innerText = (etaNew * 100).toFixed(1) + '%';
+            document.getElementById('etaTradVal').innerText = (etaTrad * 100).toFixed(1) + '%';
+            document.getElementById('poutVal').innerText = poutNorm.toFixed(2) + ' x';
+
+            myChart.setOption({
+                series: [{
+                    markLine: { data: [{ xAxis: g }] }
+                }]
+            });
+        }
+
+        document.getElementById('gammaSlider').addEventListener('input', updateDashboard);
+        window.addEventListener('resize', () => myChart.resize());
+    </script>
+</body>
+</html>
