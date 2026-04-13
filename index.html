@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>谐波注入与功率放大器效率优化模拟器</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        body { 
+            background-color: #0d0d0d; 
+            color: #e0e0e0; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            min-height: 100vh; 
+            margin: 0; 
+        }
+        .container { 
+            background-color: #1a1a1a; 
+            padding: 30px; 
+            border-radius: 16px; 
+            box-shadow: 0 12px 40px rgba(0,0,0,0.8); 
+            width: 960px; 
+            border: 1px solid #2a2a2a;
+        }
+        .header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 10px; 
+            border-bottom: 1px solid #333;
+            padding-bottom: 20px;
+        }
+        .title-area h2 { margin: 0 0 8px 0; font-size: 1.6em; color: #ffffff; letter-spacing: 1px;}
+        .title-area p { font-size: 0.9em; color: #ffb84d; margin: 0;}
+        .stats { 
+            display: flex; 
+            gap: 30px; 
+            text-align: right;
+        }
+        .stat-box {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+        .stat-label { font-size: 0.85em; color: #888; margin-bottom: 5px;}
+        .stat-value { font-size: 1.5em; font-weight: 800; font-family: 'Courier New', Courier, monospace;}
+        
+        .val-k { color: #ff6b6b; }
+        .val-v1 { color: #69db7c; }
+        .val-gain { color: #4dabf7; }
+
+        .slider-container { 
+            display: flex; 
+            align-items: center; 
+            margin-top: 10px; 
+            background: #242424;
+            padding: 18px 25px;
+            border-radius: 12px;
+            border: 1px solid #333;
+        }
+        label { color: #aaa; font-weight: 500; font-size: 1.1em; width: 140px;}
+        input[type=range] { 
+            flex-grow: 1; 
+            margin: 0 20px; 
+            accent-color: #ffb84d; 
+            cursor: pointer;
+            height: 6px;
+            border-radius: 3px;
+        }
+        /* ECharts 容器 */
+        #chart { 
+            width: 100%; 
+            height: 500px; 
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title-area">
+                <h2>谐波注入与功率放大器效率优化</h2>
+                <p>✨ 核心机制：在不跌破膝点电压 (Vk) 的前提下，最大化基波振幅。</p>
+            </div>
+            <div class="stats">
+                <div class="stat-box">
+                    <span class="stat-label">谐波系数 (k)</span>
+                    <span id="kVal" class="stat-value val-k">-0.35</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">基波振幅 (V1)</span>
+                    <span id="v1Val" class="stat-value val-v1">1.414</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">振幅增益</span>
+                    <span id="gainVal" class="stat-value val-gain">+41.4%</span>
+                </div>
+            </div>
+        </div>
+        
+        <div id="chart"></div>
+        
+        <div class="slider-container">
+            <label for="kSlider">拖动调节 $k$ 值：</label>
+            <input type="range" id="kSlider" min="-0.5" max="0.5" step="0.01" value="-0.35">
+        </div>
+    </div>
+
+    <script>
+        // 初始化 ECharts 实例 (使用暗黑主题)
+        const myChart = echarts.init(document.getElementById('chart'), 'dark');
+
+        // 配置项骨架
+        const option = {
+            backgroundColor: 'transparent',
+            tooltip: {
+                trigger: 'axis',
+                backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                borderColor: '#444',
+                textStyle: { color: '#eee' },
+                formatter: function (params) {
+                    let tooltipHtml = `<div style="margin-bottom:5px; border-bottom:1px solid #555; padding-bottom:5px;">相位 (ωt): ${(params[0].axisValue / Math.PI).toFixed(2)}π</div>`;
+                    params.forEach(param => {
+                        if(param.seriesName !== '膝点电压限制 (Vk)') {
+                            tooltipHtml += `<div style="display:flex; align-items:center; gap:8px;">
+                                <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background-color:${param.color}"></span>
+                                ${param.seriesName}: <span style="font-weight:bold">${param.data[1].toFixed(3)}</span>
+                            </div>`;
+                        }
+                    });
+                    return tooltipHtml;
+                }
+            },
+            legend: {
+                top: 0,
+                textStyle: { color: '#ccc', fontSize: 13 },
+                icon: 'roundRect',
+                itemWidth: 20,
+                itemHeight: 4
+            },
+            grid: {
+                left: '3%', right: '4%', bottom: '5%', top: '12%', containLabel: true
+            },
+            xAxis: {
+                type: 'value',
+                name: '相位 (ωt) →',
+                nameLocation: 'end',
+                nameTextStyle: { color: '#aaa', padding: [0, 0, 0, 10] },
+                min: 0,
+                max: 4 * Math.PI,
+                interval: Math.PI / 2, // 强制每 0.5π 刻度
+                axisLabel: {
+                    color: '#888',
+                    formatter: function (value) {
+                        if (value === 0) return '0';
+                        let piMultiple = value / Math.PI;
+                        if (piMultiple === 1) return 'π';
+                        if (piMultiple === 2) return '2π';
+                        if (piMultiple === 3) return '3π';
+                        if (piMultiple === 4) return '4π';
+                        return piMultiple + 'π';
+                    }
+                },
+                splitLine: { lineStyle: { color: '#333', type: 'dashed' } }
+            },
+            yAxis: {
+                type: 'value',
+                name: '归一化电压 (V/V1_TL)',
+                nameTextStyle: { color: '#aaa', padding: [0, 0, 10, 0] },
+                min: -1.5,
+                max: 2.5,
+                axisLabel: { color: '#888' },
+                splitLine: { lineStyle: { color: '#333' } }
+            },
+            series: [
+                {
+                    name: '基波 (v1)',
+                    type: 'line',
+                    smooth: true,
+                    showSymbol: false,
+                    itemStyle: { color: '#e0e0e0' },
+                    lineStyle: { width: 2, type: 'dashed' },
+                    data: []
+                },
+                {
+                    name: '二次谐波 (v2)',
+                    type: 'line',
+                    smooth: true,
+                    showSymbol: false,
+                    itemStyle: { color: '#4dabf7' },
+                    lineStyle: { width: 2 },
+                    data: []
+                },
+                {
+                    name: '总漏极电压 (vds)',
+                    type: 'line',
+                    smooth: true,
+                    showSymbol: false,
+                    itemStyle: { color: '#ff6b6b' },
+                    lineStyle: { width: 4 }, // 加粗突出总电压
+                    data: []
+                },
+                {
+                    name: '膝点电压限制 (Vk)',
+                    type: 'line',
+                    showSymbol: false,
+                    itemStyle: { color: '#666' },
+                    lineStyle: { width: 2, type: 'dashed' },
+                    data: [[0, -1], [4 * Math.PI, -1]], // 画一条平直的底线
+                    tooltip: { show: false } // 不在 tooltip 中显示
+                }
+            ]
+        };
+
+        // 核心计算与数据更新
+        function updateWaveform() {
+            const k = parseFloat(document.getElementById('kSlider').value);
+            
+            let dataV1 = [];
+            let dataV2 = [];
+            let dataVds = [];
+            
+            // 1. 寻找波谷深度以计算缩放因子 S
+            let minShapeVal = 0;
+            // 步长取 0.05 保证曲线极致平滑
+            for (let x = 0; x <= 4 * Math.PI; x += 0.05) {
+                let shape = -Math.cos(x) - k * Math.cos(2 * x);
+                if (shape < minShapeVal) minShapeVal = shape;
+            }
+            
+            const S = minShapeVal < 0 ? Math.abs(1 / minShapeVal) : 1;
+
+            // 2. 生成实际绘制的坐标点
+            for (let x = 0; x <= 4 * Math.PI; x += 0.05) {
+                let v1 = -S * Math.cos(x);
+                let v2 = -S * k * Math.cos(2 * x);
+                let vds = v1 + v2;
+                
+                dataV1.push([x, v1]);
+                dataV2.push([x, v2]);
+                dataVds.push([x, vds]);
+            }
+
+            // 3. 将数据填入 ECharts 并渲染
+            option.series[0].data = dataV1;
+            option.series[1].data = dataV2;
+            option.series[2].data = dataVds;
+            myChart.setOption(option);
+
+            // 4. 更新顶部面板数据
+            document.getElementById('kVal').innerText = k.toFixed(2);
+            document.getElementById('v1Val').innerText = S.toFixed(3);
+            
+            const gain = (S - 1) * 100;
+            const gainEl = document.getElementById('gainVal');
+            if (gain >= 0) {
+                gainEl.innerText = "+" + gain.toFixed(1) + "%";
+                gainEl.style.color = "#4dabf7"; // 蓝色提升
+            } else {
+                gainEl.innerText = gain.toFixed(1) + "%";
+                gainEl.style.color = "#ff6b6b"; // 红色下降
+            }
+        }
+
+        // 绑定滑块事件
+        document.getElementById('kSlider').addEventListener('input', updateWaveform);
+        
+        // 初始化运行一次
+        updateWaveform();
+
+        // 监听窗口大小改变，实现自适应
+        window.addEventListener('resize', function() {
+            myChart.resize();
+        });
+    </script>
+</body>
+</html>
